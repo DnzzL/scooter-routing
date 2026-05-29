@@ -76,10 +76,12 @@ pub fn build_graph(path: &Path) -> RoadGraph {
             // In France, highway=trunk + bicycle=no + foot=no is a dead giveaway
             // for a voie rapide (even without motorroad=yes or sidewalk=no tags).
             // Also catch elevated roads (bridge/viaduct/layer).
+            // Also catch trunk roads with speed limit >= 80 km/h (50cc illegal).
             let is_voie_rapide = highway == HighwayType::Trunk
                 && ((foot_tag == "no" && bicycle_tag == "no")
                     || tags.get("bridge").is_some()
-                    || tags.get("layer").is_some());
+                    || tags.get("layer").is_some()
+                    || maxspeed.map_or(false, |s| s >= 80.0));
 
             // Elevate motorroad flag if this is a disguised voie rapide
             let effective_motorroad = motorroad || is_voie_rapide;
