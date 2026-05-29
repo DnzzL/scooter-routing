@@ -71,19 +71,13 @@ pub fn build_graph(path: &Path) -> RoadGraph {
             // FRENCH ROAD HEURISTIC: Voie Mathis (M6210) and similar "voies rapides" in Nice
             // are often tagged highway=trunk + bicycle=no + foot=no WITHOUT motorroad=yes.
             // Treat these as motorroad=yes to block 50cc/voiturettes.
-            let _bicycle = tags.get("bicycle").map(|s| s.as_str()).unwrap_or("");
-            let _foot = tags.get("foot").map(|s| s.as_str()).unwrap_or("");
-            let maxspeed_val = maxspeed.unwrap_or(0.0);
-            // Block trunk roads that are clearly voies rapides:
-            // 1) highway=trunk + (foot=no or bicycle=no) + sidewalk=no
-            // 2) highway=trunk + maxspeed>=70 + foot=no + bicycle=no
-            // 3) highway=trunk + bridge/viaduct/layer (elevated road)
-            let is_restricted_trunk = highway == HighwayType::Trunk
-                && (_foot == "no" || _bicycle == "no")
-                && tags.get("sidewalk").map(|s| s.as_str()) == Some("no");
+            let bicycle_tag = tags.get("bicycle").map(|s| s.as_str()).unwrap_or("");
+            let foot_tag = tags.get("foot").map(|s| s.as_str()).unwrap_or("");
+            // In France, highway=trunk + bicycle=no + foot=no is a dead giveaway
+            // for a voie rapide (even without motorroad=yes or sidewalk=no tags).
+            // Also catch elevated roads (bridge/viaduct/layer).
             let is_voie_rapide = highway == HighwayType::Trunk
-                && (is_restricted_trunk
-                    || (maxspeed_val >= 70.0 && _foot == "no" && _bicycle == "no")
+                && ((foot_tag == "no" && bicycle_tag == "no")
                     || tags.get("bridge").is_some()
                     || tags.get("layer").is_some());
 
