@@ -68,6 +68,28 @@ pub fn build_graph(path: &Path) -> RoadGraph {
             let oneway = tags.get("oneway") == Some(&"yes".to_string());
             let maxspeed: Option<f32> = tags.get("maxspeed").and_then(|s| s.parse::<f32>().ok());
 
+            // FRENCH ROAD HEURISTIC: Voie Mathis (M6210) and similar "voies rapides" in Nice
+            // are often tagged highway=trunk + bicycle=no + foot=no WITHOUT motorroad=yes.
+            // Treat these as motorroad=yes to block 50cc/voiturettes.
+            let _bicycle = tags.get("bicycle").map(|s| s.as_str()).unwrap_or("");
+            let _foot = tags.get("foot").map(|s| s.as_str()).unwrap_or("");
+            let maxspeed_val = maxspeed.unwrap_or(0.0);
+            // Block trunk roads that are clearly voies rapides:
+            // 1) highway=trunk + (foot=no or bicycle=no) + sidewalk=no
+            // 2) highway=trunk + maxspeed>=70 + foot=no + bicycle=no
+            // 3) highway=trunk + bridge/viaduct/layer (elevated road)
+            let is_restricted_trunk = highway == HighwayType::Trunk
+                && (_foot == "no" || _bicycle == "no")
+                && tags.get("sidewalk").map(|s| s.as_str()) == Some("no");
+            let is_voie_rapide = highway == HighwayType::Trunk
+                && (is_restricted_trunk
+                    || (maxspeed_val >= 70.0 && _foot == "no" && _bicycle == "no")
+                    || tags.get("bridge").is_some()
+                    || tags.get("layer").is_some());
+
+            // Elevate motorroad flag if this is a disguised voie rapide
+            let effective_motorroad = motorroad || is_voie_rapide;
+
             let refs: Vec<i64> = way.refs().collect();
             if refs.len() < 2 { return; }
 
@@ -97,10 +119,10 @@ pub fn build_graph(path: &Path) -> RoadGraph {
 
                 let speed = maxspeed.unwrap_or_else(|| highway.base_speed());
 
-                graph.add_edge_raw(from, to, dist, speed, highway, oneway, motorroad);
+                graph.add_edge_raw(from, to, dist, speed, highway, oneway, effective_motorroad);
 
                 if !oneway {
-                    graph.add_edge_raw(to, from, dist, speed, highway, false, motorroad);
+                    graph.add_edge_raw(to, from, dist, speed, highway, false, effective_motorroad);
                 }
             }
 
