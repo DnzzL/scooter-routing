@@ -27,6 +27,14 @@ pub struct RouteQuery {
     profile: String,
 }
 
+#[derive(Deserialize)]
+pub struct RestrictionsQuery {
+    south: f64,
+    west: f64,
+    north: f64,
+    east: f64,
+}
+
 fn default_profile() -> String {
     "scooter".into()
 }
@@ -82,6 +90,58 @@ async fn handle_route(
     }
 }
 
+async fn handle_restrictions(
+    Query(query): Query<RestrictionsQuery>,
+) -> Json<serde_json::Value> {
+    let bbox = format!("{},{},{},{}", query.south, query.west, query.north, query.east);
+    let query_str = format!(
+        "[out:json][timeout:15];(\
+        way[\"highway\"=\"motorway\"]({bbox});\
+        way[\"highway\"=\"motorway_link\"]({bbox});\
+        way[\"motorroad\"=\"yes\"]({bbox});\
+        way[\"highway\"=\"trunk\"]({bbox});\
+        way[\"highway\"=\"trunk_link\"]({bbox});\
+        way[\"highway\"~\"primary|secondary|tertiary|residential|service|unclassified|living_street\"]({bbox});\
+        );out body;>;out skel qt;"
+    );
+
+    // Use curl subprocess to avoid adding HTTP deps
+    let body = format!("data={}", url_encode(&query_str));
+    let output = tokio::process::Command::new("curl")
+        .args(["-s", "--max-time", "20", "-X", "POST",
+               "https://overpass-api.de/api/interpreter",
+               "-H", "Content-Type: application/x-www-form-urlencoded",
+               "--data-binary", &body])
+        .output()
+        .await;
+
+    match output {
+        Ok(out) if out.status.success() => {
+            match serde_json::from_slice::<serde_json::Value>(&out.stdout) {
+                Ok(json) => Json(json),
+                Err(e) => Json(serde_json::json!({"error": format!("parse: {e}")})),
+            }
+        }
+        Ok(out) => Json(serde_json::json!({
+            "error": format!("Overpass curl failed: {}", String::from_utf8_lossy(&out.stderr))
+        })),
+        Err(e) => Json(serde_json::json!({
+            "error": format!("Overpass proxy error: {}", e)
+        })),
+    }
+}
+
+fn url_encode(s: &str) -> String {
+    s.chars().map(|c| match c {
+        'A'..='Z' | 'a'..='z' | '0'..='9' | '_' | '.' | '-' | '~' => c.to_string(),
+        ' ' => "+".to_string(),
+        ':' | ';' | ',' | '(' | ')' | '!' | '?' | '=' | '>' | '<' | '|' | '/' | '\\' | '[' | ']' | '{' | '}' => {
+            format!("%{:02X}", c as u8)
+        }
+        c => format!("%{:02X}", c as u8),
+    }).collect()
+}
+
 async fn handle_health() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "status": "ok",
@@ -100,6 +160,7 @@ pub async fn serve(graph: RoadGraph, bind: &str) {
     let app = Router::new()
         .route("/", get(handle_index))
         .route("/api/route", get(handle_route))
+        .route("/api/restrictions", get(handle_restrictions))
         .route("/api/health", get(handle_health))
         .layer(
             CorsLayer::new()

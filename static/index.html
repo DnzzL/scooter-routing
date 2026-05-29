@@ -173,7 +173,7 @@ body {
 
 <script>
 const API_URL = '';
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+const OSM_API = '/api/restrictions';
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const NICE_CENTER = [43.7102, 7.2620];
 const NICE_BOUNDS = [[43.63, 7.12], [43.78, 7.40]];
@@ -193,17 +193,12 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 // ---- Restriction overlay via Overpass ----
 async function loadRestrictions() {
     const b = map.getBounds();
-    const bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
-    const query = `[out:json][timeout:15];(way["highway"="motorway"](${bbox});way["highway"="motorway_link"](${bbox});way["motorroad"="yes"](${bbox});way["highway"="trunk"](${bbox});way["highway"="trunk_link"](${bbox});way["highway"~"primary|secondary|tertiary|residential|service|unclassified|living_street"](${bbox}););out body;>;out skel qt;`;
+    const params = `south=${b.getSouth()}&west=${b.getWest()}&north=${b.getNorth()}&east=${b.getEast()}`;
     try {
-        const resp = await fetch(OVERPASS_URL, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'data=' + encodeURIComponent(query),
-        });
+        const resp = await fetch(`${OSM_API}?${params}`, {signal: AbortSignal.timeout(20000)});
         const data = await resp.json();
         renderRestrictions(data);
-    } catch(e) { console.warn('Overpass:', e); }
+    } catch(e) { console.warn('Overpass proxy:', e); }
 }
 
 function renderRestrictions(data) {
