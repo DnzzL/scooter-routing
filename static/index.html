@@ -281,11 +281,12 @@ async function fetchSuggestions(query, input, dropdown) {
         results = (data.features || []).map(f => ({
             name: f.properties.name || '',
             street: f.properties.street || '',
+            housenumber: f.properties.housenumber || '',
             city: f.properties.city || f.properties.locality || '',
             postcode: f.properties.postcode || '',
             lat: f.geometry.coordinates[1],
             lon: f.geometry.coordinates[0],
-            label: [f.properties.street, f.properties.city].filter(Boolean).join(', ') || f.properties.name || ''
+            label: [f.properties.housenumber, f.properties.street || f.properties.name, f.properties.city].filter(Boolean).join(', ') || f.properties.name || ''
         }));
         renderDropdown(results, dropdown, input);
         selectedIdx = -1;
@@ -296,15 +297,15 @@ function renderDropdown(items, dropdown, input) {
     if (!items.length) { dropdown.style.display = 'none'; return; }
     dropdown.innerHTML = items.map((r, i) =>
         `<div class="ac-item" data-idx="${i}" onmousedown="selectResult(results[${i}], document.getElementById('${input.id}'), document.getElementById('${dropdown.id}'))">
-            <div class="ac-name">${escapeHtml(r.name || r.street || r.label)}</div>
-            <div class="ac-addr">${escapeHtml(r.label)}, ${r.postcode} ${r.city}</div>
+            <div class="ac-name">${escapeHtml(r.street || r.name || '?')}</div>
+            <div class="ac-addr">${escapeHtml([r.housenumber, r.postcode, r.city].filter(Boolean).join(' '))}</div>
         </div>`
     ).join('');
     dropdown.style.display = 'block';
 }
 
 function selectResult(result, input, dropdown) {
-    input.value = result.name || result.street || result.label;
+    input.value = result.label || result.street || result.name;
     dropdown.style.display = 'none';
     // Store coordinate for later use
     input.dataset.lat = result.lat;
