@@ -50,15 +50,35 @@ impl Profile {
     pub fn allowed_speed(&self, highway: &crate::graph::HighwayType, road_speed: f64) -> Option<f64> {
         let base: f64 = match highway {
             crate::graph::HighwayType::Motorway | crate::graph::HighwayType::MotorwayLink => return None,
-            crate::graph::HighwayType::Trunk | crate::graph::HighwayType::TrunkLink => 30.0,
-            crate::graph::HighwayType::Primary | crate::graph::HighwayType::PrimaryLink => 25.0,
-            crate::graph::HighwayType::Secondary | crate::graph::HighwayType::SecondaryLink => 25.0,
-            crate::graph::HighwayType::Tertiary | crate::graph::HighwayType::TertiaryLink => 20.0,
-            crate::graph::HighwayType::Residential => 20.0,
-            crate::graph::HighwayType::LivingStreet => 12.0,
-            crate::graph::HighwayType::Service => 15.0,
-            crate::graph::HighwayType::Unclassified | crate::graph::HighwayType::Road => 20.0,
-            crate::graph::HighwayType::Other => 20.0,
+            // Scooter and voiturette have different base speeds.
+            // Voiturette is faster but still affected by traffic/lights.
+            crate::graph::HighwayType::Trunk | crate::graph::HighwayType::TrunkLink => {
+                if self.max_speed_kmh > 50.0 { 35.0 } else { 25.0 }
+            }
+            crate::graph::HighwayType::Primary | crate::graph::HighwayType::PrimaryLink => {
+                if self.max_speed_kmh > 50.0 { 22.0 } else { 18.0 }
+            }
+            crate::graph::HighwayType::Secondary | crate::graph::HighwayType::SecondaryLink => {
+                if self.max_speed_kmh > 50.0 { 22.0 } else { 18.0 }
+            }
+            crate::graph::HighwayType::Tertiary | crate::graph::HighwayType::TertiaryLink => {
+                if self.max_speed_kmh > 50.0 { 18.0 } else { 15.0 }
+            }
+            crate::graph::HighwayType::Residential => {
+                if self.max_speed_kmh > 50.0 { 16.0 } else { 14.0 }
+            }
+            crate::graph::HighwayType::LivingStreet => {
+                if self.max_speed_kmh > 50.0 { 10.0 } else { 10.0 }
+            }
+            crate::graph::HighwayType::Service => {
+                if self.max_speed_kmh > 50.0 { 14.0 } else { 12.0 }
+            }
+            crate::graph::HighwayType::Unclassified | crate::graph::HighwayType::Road => {
+                if self.max_speed_kmh > 50.0 { 16.0 } else { 14.0 }
+            }
+            crate::graph::HighwayType::Other => {
+                if self.max_speed_kmh > 50.0 { 16.0 } else { 14.0 }
+            }
         };
         let limit = base.min(self.max_speed_kmh);
         // Also cap at road's own speed limit if it's slower
