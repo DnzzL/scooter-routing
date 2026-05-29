@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/
 WORKDIR /data
 COPY --from=builder /app/target/release/scooter-routing /usr/local/bin/
 COPY --from=importer /data/region.graph /data/region.graph
+COPY static/ /data/static/
 
 EXPOSE 3000
 

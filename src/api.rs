@@ -3,7 +3,7 @@ use crate::profile::{Profile, VehicleType};
 use crate::routing;
 use axum::{
     extract::{Query, State},
-    http::HeaderValue,
+    http::{HeaderValue, header},
     response::{Html, IntoResponse, Json},
     routing::get,
     Router,
@@ -153,12 +153,37 @@ async fn handle_index() -> impl IntoResponse {
     Html(include_str!("../static/index.html"))
 }
 
+async fn handle_static(path: axum::extract::Path<String>) -> impl IntoResponse {
+    let mime = |ext: &str| -> &str {
+        match ext {
+            "svg" => "image/svg+xml",
+            "json" => "application/manifest+json",
+            "js" => "application/javascript",
+            "css" => "text/css",
+            "png" => "image/png",
+            _ => "application/octet-stream",
+        }
+    };
+    let path = path.0.trim_start_matches('/');
+    let ext = path.rsplit('.').next().unwrap_or("");
+    let static_dir = std::path::Path::new("static");
+    // Also check /data/static for Docker deployments
+    let data_dir = std::path::Path::new("/data/static");
+    let content = std::fs::read(static_dir.join(&path))
+        .or_else(|_| std::fs::read(data_dir.join(&path)));
+    match content {
+        Ok(bytes) => ([(header::CONTENT_TYPE, mime(ext))], bytes).into_response(),
+        Err(_) => (axum::http::StatusCode::NOT_FOUND, "404").into_response(),
+    }
+}
+
 pub async fn serve(graph: RoadGraph, bind: &str) {
     let spatial = graph.build_spatial_index();
     let state = Arc::new(AppState { graph, spatial });
 
     let app = Router::new()
         .route("/", get(handle_index))
+        .route("/{*path}", get(handle_static))
         .route("/api/route", get(handle_route))
         .route("/api/restrictions", get(handle_restrictions))
         .route("/api/health", get(handle_health))
