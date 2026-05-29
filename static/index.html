@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScooterRoute - Itinéraire scooter & voiture sans permis</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    background: #0f172a;
+    color: #e2e8f0;
+}
+#sidebar {
+    width: 380px;
+    min-width: 380px;
+    display: flex;
+    flex-direction: column;
+    background: #1e293b;
+    border-right: 1px solid #334155;
+    z-index: 1000;
+    overflow-y: auto;
+}
+#sidebar-header {
+    padding: 20px;
+    border-bottom: 1px solid #334155;
+}
+#sidebar-header h1 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+#sidebar-header h1 span {
+    background: linear-gradient(135deg, #3b82f6, #06b6d4);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+#sidebar-header p { font-size: 0.8rem; color: #94a3b8; margin-top: 4px; }
+#route-form { padding: 16px 20px; border-bottom: 1px solid #334155; }
+.form-group { margin-bottom: 10px; }
+.form-group label {
+    display: block; font-size: 0.75rem; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #64748b; margin-bottom: 4px; font-weight: 600;
+}
+.form-group input {
+    width: 100%; padding: 8px 12px;
+    border: 1px solid #334155; border-radius: 8px;
+    background: #0f172a; color: #e2e8f0; font-size: 0.9rem; outline: none;
+}
+.form-group input:focus { border-color: #3b82f6; }
+.form-group input::placeholder { color: #475569; }
+#route-btn {
+    width: 100%; padding: 10px;
+    border: none; border-radius: 8px;
+    background: linear-gradient(135deg, #3b82f6, #06b6d4);
+    color: white; font-weight: 600; font-size: 0.95rem; cursor: pointer;
+    margin-top: 4px;
+}
+#route-btn:hover { opacity: 0.9; }
+#route-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.vehicle-selector { display: flex; gap: 8px; margin-bottom: 10px; }
+.vehicle-btn {
+    flex: 1; padding: 8px 12px;
+    border: 1px solid #334155; border-radius: 8px;
+    background: #0f172a; color: #94a3b8; font-size: 0.8rem;
+    cursor: pointer; text-align: center;
+}
+.vehicle-btn.active {
+    border-color: #3b82f6; background: rgba(59,130,246,0.15); color: #60a5fa;
+}
+#legend { padding: 12px 20px; border-bottom: 1px solid #334155; }
+#legend h3 {
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
+    color: #64748b; margin-bottom: 8px; font-weight: 600;
+}
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; margin-bottom: 4px; color: #cbd5e1; }
+.legend-color { width: 20px; height: 4px; border-radius: 2px; flex-shrink: 0; }
+#route-result { padding: 16px 20px; flex: 1; overflow-y: auto; }
+#route-result h3 {
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
+    color: #64748b; margin-bottom: 8px; font-weight: 600;
+}
+.route-info {
+    padding: 12px; background: #0f172a; border-radius: 8px;
+    margin-bottom: 8px; border: 1px solid #334155;
+}
+.route-info .stat { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.85rem; }
+.route-info .stat-label { color: #94a3b8; }
+.route-info .stat-value { color: #e2e8f0; font-weight: 600; }
+.route-info .stat-value.distance { color: #3b82f6; }
+.route-info .stat-value.time { color: #22c55e; }
+.alert {
+    padding: 10px 12px; border-radius: 8px; font-size: 0.8rem; margin-bottom: 8px;
+}
+.alert.warning { background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3); color: #fbbf24; }
+.alert.info { border-color: rgba(59,130,246,0.3); color: #60a5fa; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); }
+#map { flex: 1; height: 100vh; }
+@media (max-width: 768px) {
+    body { flex-direction: column; }
+    #sidebar { width: 100%; min-width: unset; max-height: 40vh; }
+    #map { height: 60vh; }
+}
+.spinner {
+    display: inline-block; width: 16px; height: 16px;
+    border: 2px solid #475569; border-top-color: #3b82f6;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    margin-right: 6px; vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="sidebar">
+    <div id="sidebar-header">
+        <h1>🛵 <span>ScooterRoute</span></h1>
+        <p>Itinéraires pour scooter 50cc & voiture sans permis — Nice</p>
+    </div>
+    <div id="route-form">
+        <div class="vehicle-selector">
+            <button class="vehicle-btn active" onclick="setVehicle('scooter')">🛵 Scooter 50cc</button>
+            <button class="vehicle-btn" onclick="setVehicle('voiturette')">🚗 Voiture sans permis</button>
+        </div>
+        <div class="form-group">
+            <label for="from">Départ</label>
+            <input type="text" id="from" placeholder="Adresse de départ..." />
+        </div>
+        <div class="form-group">
+            <label for="to">Arrivée</label>
+            <input type="text" id="to" placeholder="Adresse d'arrivée..." />
+        </div>
+        <button id="route-btn" onclick="calculateRoute()">🚀 Calculer l'itinéraire</button>
+    </div>
+    <div id="legend">
+        <h3>🚦 Restrictions routières</h3>
+        <div class="legend-item"><div class="legend-color" style="background:#ef4444;"></div> Interdit (autoroute, voie rapide)</div>
+        <div class="legend-item"><div class="legend-color" style="background:#f59e0b;"></div> Partiellement restreint (à vérifier)</div>
+        <div class="legend-item"><div class="legend-color" style="background:#10b981;"></div> Autorisé</div>
+        <div class="legend-item" style="margin-top:6px;color:#64748b;font-size:0.7rem;">
+            <span>Restrictions mises à jour automatiquement</span>
+        </div>
+    </div>
+    <div id="route-result">
+        <div id="route-result-content">
+            <div class="alert info">
+                💡 Saisis une adresse de départ et d'arrivée.<br>
+                Routes interdites en rouge.
+            </div>
+        </div>
+    </div>
+</div>
+<div id="map"></div>
+
+<script>
+const API_URL = '';
+const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+const NICE_CENTER = [43.7102, 7.2620];
+const NICE_BOUNDS = [[43.63, 7.12], [43.78, 7.40]];
+
+let currentVehicle = 'scooter';
+let restrictionOverlay = null;
+let routeLine = null;
+let markerStart = null;
+let markerEnd = null;
+let debounceTimer = null;
+
+const map = L.map('map', { center: NICE_CENTER, zoom: 13, maxBounds: NICE_BOUNDS, maxBoundsViscosity: 1.0 });
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OSM', maxZoom: 19
+}).addTo(map);
+
+// ---- Restriction overlay via Overpass ----
+async function loadRestrictions() {
+    const b = map.getBounds();
+    const bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+    const query = `[out:json][timeout:15];(way["highway"="motorway"](${bbox});way["highway"="motorway_link"](${bbox});way["motorroad"="yes"](${bbox});way["highway"="trunk"](${bbox});way["highway"="trunk_link"](${bbox});way["highway"~"primary|secondary|tertiary|residential|service|unclassified|living_street"](${bbox}););out body;>;out skel qt;`;
+    try {
+        const resp = await fetch(OVERPASS_URL, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'data=' + encodeURIComponent(query),
+        });
+        const data = await resp.json();
+        renderRestrictions(data);
+    } catch(e) { console.warn('Overpass:', e); }
+}
+
+function renderRestrictions(data) {
+    if (restrictionOverlay) map.removeLayer(restrictionOverlay);
+    const nodes = {};
+    for (const el of data.elements || []) { if (el.type === 'node') nodes[el.id] = [el.lat, el.lon]; }
+    const interdit=[], partiel=[], autorise=[];
+    for (const el of data.elements || []) {
+        if (el.type !== 'way' || !el.nodes) continue;
+        const t = el.tags || {};
+        const h = t.highway || '';
+        const latlngs = el.nodes.map(id => nodes[id]).filter(Boolean);
+        if (latlngs.length < 2) continue;
+        if (h === 'motorway' || h === 'motorway_link' || t.motorroad === 'yes') { interdit.push(latlngs); }
+        else if (h === 'trunk' || h === 'trunk_link') { partiel.push(latlngs); }
+        else { autorise.push(latlngs); }
+    }
+    const layers = [];
+    if (interdit.length) layers.push(L.polyline(interdit, {color:'#ef4444', weight:3, opacity:0.8}));
+    if (partiel.length) layers.push(L.polyline(partiel, {color:'#f59e0b', weight:2, opacity:0.6, dashArray:'6,4'}));
+    if (autorise.length) layers.push(L.polyline(autorise, {color:'#10b981', weight:1.5, opacity:0.3}));
+    restrictionOverlay = L.layerGroup(layers);
+    restrictionOverlay.addTo(map);
+}
+map.on('moveend', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadRestrictions, 500); });
+map.on('zoomend', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadRestrictions, 500); });
+
+// ---- Geocoding ----
+async function geocode(query) {
+    if (!query || query.length < 3) return null;
+    const url = `${NOMINATIM_URL}?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=fr`;
+    try {
+        const resp = await fetch(url, {headers: {'User-Agent': 'ScooterRoute/1.0'}});
+        const data = await resp.json();
+        if (data && data.length) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    } catch(e) {}
+    return null;
+}
+
+// ---- Routing via Rust API ----
+async function calculateRoute() {
+    const fromInput = document.getElementById('from').value.trim();
+    const toInput = document.getElementById('to').value.trim();
+    const btn = document.getElementById('route-btn');
+    const resultEl = document.getElementById('route-result-content');
+    if (!fromInput || !toInput) {
+        resultEl.innerHTML = '<div class="alert warning">⚠️ Saisis un départ ET une arrivée.</div>';
+        return;
+    }
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Calcul...';
+
+    try {
+        const fromCoord = await geocode(fromInput + ', Nice, France');
+        const toCoord = await geocode(toInput + ', Nice, France');
+        if (!fromCoord || !toCoord) {
+            resultEl.innerHTML = '<div class="alert warning">⚠️ Adresse introuvable.</div>';
+            btn.disabled = false; btn.innerHTML = '🚀 Calculer';
+            return;
+        }
+        if (markerStart) map.removeLayer(markerStart);
+        if (markerEnd) map.removeLayer(markerEnd);
+        if (routeLine) map.removeLayer(routeLine);
+        markerStart = L.circleMarker(fromCoord, {radius:8, color:'#3b82f6', fillColor:'#3b82f6', fillOpacity:1, weight:2}).addTo(map).bindPopup('Départ');
+        markerEnd = L.circleMarker(toCoord, {radius:8, color:'#22c55e', fillColor:'#22c55e', fillOpacity:1, weight:2}).addTo(map).bindPopup('Arrivée');
+        map.fitBounds([fromCoord, toCoord], {padding: [60,60]});
+
+        // Call our Rust API
+        const url = `${API_URL}/api/route?from_lat=${fromCoord[0]}&from_lon=${fromCoord[1]}&to_lat=${toCoord[0]}&to_lon=${toCoord[1]}&profile=${currentVehicle}`;
+        const resp = await fetch(url, {signal: AbortSignal.timeout(10000)});
+        const data = await resp.json();
+        if (!data.found) {
+            resultEl.innerHTML = `<div class="alert warning">⚠️ ${data.error || 'Pas de route trouvée'}</div>`;
+            btn.disabled = false; btn.innerHTML = '🚀 Calculer';
+            return;
+        }
+        // Draw route
+        const coords = data.path.map(c => [c[1], c[0]]);
+        routeLine = L.polyline(coords, {color: '#3b82f6', weight: 5, opacity: 0.8}).addTo(map);
+        const maxSpeed = data.max_speed_kmh || (currentVehicle === 'scooter' ? 45 : 70);
+        resultEl.innerHTML = `
+            <div class="route-info">
+                <div class="stat"><span class="stat-label">📏 Distance</span><span class="stat-value distance">${data.distance_km} km</span></div>
+                <div class="stat"><span class="stat-label">⏱️ Durée estimée</span><span class="stat-value time">${data.duration_min} min</span></div>
+                <div class="stat"><span class="stat-label">🛵 Véhicule</span><span class="stat-value">${currentVehicle === 'scooter' ? 'Scooter 50cc' : 'Voiture sans permis'}</span></div>
+                <div class="stat"><span class="stat-label">⚡ Vitesse max</span><span class="stat-value">${maxSpeed} km/h</span></div>
+            </div>
+            <div style="margin-top:12px;font-size:0.75rem;color:#64748b;text-align:center;">
+                🦀 Routeur Rust | OSM data | <a href="https://github.com/DnzzL/scooter-routing" target="_blank" style="color:#3b82f6;">GitHub</a>
+            </div>
+        `;
+    } catch(e) {
+        resultEl.innerHTML = `<div class="alert warning">⚠️ Erreur: ${e.message}</div>`;
+    }
+    btn.disabled = false;
+    btn.innerHTML = '🚀 Calculer';
+}
+
+function setVehicle(type) {
+    currentVehicle = type;
+    document.querySelectorAll('.vehicle-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll(`.vehicle-btn`).forEach(b => { if (b.textContent.includes(type === 'scooter' ? 'Scooter' : 'sans permis') ) b.classList.add('active'); });
+}
+
+loadRestrictions();
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && ['from','to'].includes(document.activeElement?.id)) calculateRoute();
+});
+</script>
+</body>
+</html>
