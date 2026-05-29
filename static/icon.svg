@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1c1f24"/>
+      <stop offset="100%" stop-color="#0e1012"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- Scooter body -->
+  <path d="M130 290c-30 0-55 20-60 48l-8 42c-2 12 7 22 18 22h412c12 0 22-12 19-24l-14-66c-5-24-28-42-54-42H130z" fill="#15171b" stroke="#333943" stroke-width="3"/>
+  <!-- Seat -->
+  <rect x="148" y="278" width="80" height="20" rx="10" fill="#566171"/>
+  <!-- Handlebar -->
+  <path d="M230 262c8-40 44-70 86-70h60c16 0 28 12 28 28v8" fill="none" stroke="#a0aaba" stroke-width="5" stroke-linecap="round"/>
+  <!-- Headlight -->
+  <ellipse cx="376" cy="256" rx="12" ry="10" fill="#007afc" opacity="0.9"/>
+  <ellipse cx="376" cy="256" rx="5" ry="4" fill="#ffffff" opacity="0.6"/>
+  <!-- Front wheel -->
+  <circle cx="370" cy="370" r="40" fill="#15171b" stroke="#566171" stroke-width="4"/>
+  <circle cx="370" cy="370" r="10" fill="#566171"/>
+  <!-- Rear wheel -->
+  <circle cx="160" cy="370" r="40" fill="#15171b" stroke="#566171" stroke-width="4"/>
+  <circle cx="160" cy="370" r="10" fill="#566171"/>
+  <!-- Floorboard -->
+  <rect x="220" y="330" width="90" height="10" rx="3" fill="#333943"/>
+</svg>

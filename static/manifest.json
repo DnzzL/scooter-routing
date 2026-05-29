@@ -1,0 +1,17 @@
+{
+  "name": "ScooterRoute",
+  "short_name": "ScooterRoute",
+  "description": "Itinéraires pour scooter 50cc et voiture sans permis — évite autoroutes et voies rapides",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e1012",
+  "theme_color": "#0e1012",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icon.svg", "type": "image/svg+xml", "sizes": "512x512" },
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "32x32" }
+  ],
+  "categories": ["navigation", "travel", "transportation"],
+  "lang": "fr",
+  "scope": "/"
+}
