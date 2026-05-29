@@ -48,13 +48,26 @@ body {
     display: block; font-size: 0.75rem; text-transform: uppercase;
     letter-spacing: 0.05em; color: #64748b; margin-bottom: 4px; font-weight: 600;
 }
-.form-group input {
-    width: 100%; padding: 8px 12px;
+.form-group input { position: relative; width: 100%; padding: 8px 12px;
     border: 1px solid #334155; border-radius: 8px;
     background: #0f172a; color: #e2e8f0; font-size: 0.9rem; outline: none;
 }
+.form-group { position: relative; }
 .form-group input:focus { border-color: #3b82f6; }
 .form-group input::placeholder { color: #475569; }
+.ac-dropdown {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 9999;
+    background: #1e293b; border: 1px solid #334155; border-radius: 0 0 8px 8px;
+    max-height: 220px; overflow-y: auto; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.ac-item {
+    padding: 8px 12px; cursor: pointer; font-size: 0.8rem; border-bottom: 1px solid #0f172a;
+    color: #cbd5e1; transition: background 0.1s;
+}
+.ac-item:last-child { border-bottom: none; }
+.ac-item:hover, .ac-item.active { background: #334155; color: #f8fafc; }
+.ac-item .ac-name { font-weight: 600; color: #e2e8f0; }
+.ac-item .ac-addr { font-size: 0.7rem; color: #64748b; margin-top: 1px; }
 #route-btn {
     width: 100%; padding: 10px;
     border: none; border-radius: 8px;
@@ -128,11 +141,13 @@ body {
         </div>
         <div class="form-group">
             <label for="from">Départ</label>
-            <input type="text" id="from" placeholder="Adresse de départ..." />
+            <input type="text" id="from" placeholder="Ex: Gare Nice Ville, Aéroport..." autocomplete="off" />
+            <div class="ac-dropdown" id="ac-from"></div>
         </div>
         <div class="form-group">
             <label for="to">Arrivée</label>
-            <input type="text" id="to" placeholder="Adresse d'arrivée..." />
+            <input type="text" id="to" placeholder="Ex: Port de Nice, Promenade..." autocomplete="off" />
+            <div class="ac-dropdown" id="ac-to"></div>
         </div>
         <button id="route-btn" onclick="calculateRoute()">🚀 Calculer l'itinéraire</button>
     </div>
@@ -216,17 +231,111 @@ function renderRestrictions(data) {
 map.on('moveend', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadRestrictions, 500); });
 map.on('zoomend', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadRestrictions, 500); });
 
-// ---- Geocoding ----
+// ---- Geocoding (Nominatim fallback) ----
 async function geocode(query) {
     if (!query || query.length < 3) return null;
+    // Check cache first
+    const key = query.toLowerCase().trim();
+    if (window._gcCache && window._gcCache[key]) return window._gcCache[key];
     const url = `${NOMINATIM_URL}?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=fr`;
     try {
         const resp = await fetch(url, {headers: {'User-Agent': 'ScooterRoute/1.0'}});
         const data = await resp.json();
-        if (data && data.length) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+        if (data && data.length) {
+            const coord = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+            if (!window._gcCache) window._gcCache = {};
+            window._gcCache[key] = coord;
+            return coord;
+        }
     } catch(e) {}
     return null;
 }
+
+// ---- Autocomplete (Photon) ----
+let acActive = null; // which input has open dropdown
+
+function setupAutocomplete(inputId, dropdownId) {
+    const input = document.getElementById(inputId);
+    const dropdown = document.getElementById(dropdownId);
+    let timer, selectedIdx = -1, results = [];
+
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        const q = input.value.trim();
+        if (q.length < 2) { dropdown.style.display = 'none'; return; }
+        timer = setTimeout(() => fetchSuggestions(q, input, dropdown), 250);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (dropdown.style.display !== 'block') return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); selectedIdx = Math.min(selectedIdx + 1, results.length - 1); highlightItem(dropdown, selectedIdx); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); selectedIdx = Math.max(selectedIdx - 1, 0); highlightItem(dropdown, selectedIdx); }
+        else if (e.key === 'Enter' && selectedIdx >= 0) { e.preventDefault(); selectResult(results[selectedIdx], input, dropdown); return; }
+        else { selectedIdx = -1; }
+    });
+
+    input.addEventListener('blur', () => setTimeout(() => { dropdown.style.display = 'none'; }, 200));
+    input.addEventListener('focus', () => { if (results.length) dropdown.style.display = 'block'; });
+}
+
+async function fetchSuggestions(query, input, dropdown) {
+    try {
+        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=fr&lat=43.71&lon=7.26`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        results = (data.features || []).map(f => ({
+            name: f.properties.name || '',
+            street: f.properties.street || '',
+            city: f.properties.city || f.properties.locality || '',
+            postcode: f.properties.postcode || '',
+            lat: f.geometry.coordinates[1],
+            lon: f.geometry.coordinates[0],
+            label: [f.properties.street, f.properties.city].filter(Boolean).join(', ') || f.properties.name || ''
+        }));
+        renderDropdown(results, dropdown, input);
+        selectedIdx = -1;
+    } catch(e) { dropdown.style.display = 'none'; }
+}
+
+function renderDropdown(items, dropdown, input) {
+    if (!items.length) { dropdown.style.display = 'none'; return; }
+    dropdown.innerHTML = items.map((r, i) =>
+        `<div class="ac-item" data-idx="${i}" onmousedown="selectResult(results[${i}], document.getElementById('${input.id}'), document.getElementById('${dropdown.id}'))">
+            <div class="ac-name">${escapeHtml(r.name || r.street || r.label)}</div>
+            <div class="ac-addr">${escapeHtml(r.label)}, ${r.postcode} ${r.city}</div>
+        </div>`
+    ).join('');
+    dropdown.style.display = 'block';
+}
+
+function selectResult(result, input, dropdown) {
+    input.value = result.name || result.street || result.label;
+    dropdown.style.display = 'none';
+    // Store coordinate for later use
+    input.dataset.lat = result.lat;
+    input.dataset.lon = result.lon;
+    // Place marker + center map
+    const coord = [result.lat, result.lon];
+    const markerKey = input.id === 'from' ? 'markerStart' : 'markerEnd';
+    if (window[markerKey]) map.removeLayer(window[markerKey]);
+    const color = input.id === 'from' ? '#3b82f6' : '#22c55e';
+    window[markerKey] = L.circleMarker(coord, {radius:7, color, fillColor:color, fillOpacity:1, weight:2}).addTo(map).bindPopup(input.id === 'from' ? 'Départ' : 'Arrivée');
+    map.setView(coord, 14);
+}
+
+function highlightItem(dropdown, idx) {
+    dropdown.querySelectorAll('.ac-item').forEach((el, i) => el.classList.toggle('active', i === idx));
+}
+
+function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+}
+
+// Init autocomplete
+setupAutocomplete('from', 'ac-from');
+setupAutocomplete('to', 'ac-to');
 
 // ---- Routing via Rust API ----
 async function calculateRoute() {
