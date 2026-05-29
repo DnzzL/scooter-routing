@@ -46,7 +46,7 @@ pub fn route(
     while let Some(State { node, .. }) = heap.pop() {
         let nu = node as usize;
         if node == to {
-            return Some(reconstruct(graph, came_from, from, to));
+            return Some(reconstruct(graph, came_from, from, to, profile));
         }
         let cur_cost = cost_so_far[nu];
 
@@ -77,7 +77,7 @@ pub fn route(
     None
 }
 
-fn reconstruct(graph: &RoadGraph, came_from: Vec<u32>, start: u32, goal: u32) -> RouteResult {
+fn reconstruct(graph: &RoadGraph, came_from: Vec<u32>, start: u32, goal: u32, profile: &Profile) -> RouteResult {
     let mut path_nodes = Vec::new();
     let mut current = goal;
     while current != u32::MAX {
@@ -92,17 +92,26 @@ fn reconstruct(graph: &RoadGraph, came_from: Vec<u32>, start: u32, goal: u32) ->
         .collect();
 
     let mut total_dist = 0.0;
+    let mut total_time_s = 0.0;
     for win in path_nodes.windows(2) {
         for e in &graph.adjacency[win[0] as usize] {
             if e.to == win[1] {
                 total_dist += e.length_m();
+                // Use the same speed calculation as in the A* search
+                if !profile.is_road_blocked(&e.highway, e.motorroad) {
+                    if let Some(speed) = profile.allowed_speed(&e.highway, e.speed_kmh()) {
+                        if speed > 0.0 {
+                            total_time_s += e.length_m() / (speed / 3.6);
+                        }
+                    }
+                }
                 break;
             }
         }
     }
 
     let distance_km = (total_dist / 1000.0 * 10.0).round() / 10.0;
-    let duration_min = ((total_dist / (45.0 / 3.6)) / 60.0).round() as u64;
+    let duration_min = (total_time_s / 60.0).round() as u64;
 
     RouteResult { found: true, distance_km, duration_min, path }
 }
