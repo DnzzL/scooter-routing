@@ -18,9 +18,9 @@
     --deep: #15171b;
     --gunmetal: #1c1f24;
     --graphite: #23262d;
-    --steel: #4a5463;
-    --pewter: #5c6880;
-    --slate: #7b8699;
+    --steel: #333943;
+    --pewter: #444d5a;
+    --slate: #566171;
     --ash: #8b96aa;
     --fog: #a0aaba;
     --silver: #bbc2ce;
@@ -36,10 +36,6 @@
     --radius-input: 6px;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-:focus-visible {
-    outline: 2px solid var(--blue);
-    outline-offset: 2px;
-}
 body {
     font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     display: flex; height: 100vh; overflow: hidden;
@@ -62,20 +58,20 @@ body {
     padding: 28px 24px 16px;
     display: flex; align-items: center; gap: 14px;
 }
-    .logo-mark {
-        width: 36px; height: 36px; flex-shrink: 0;
-        background: var(--blue); border-radius: 8px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 18px; line-height: 1;
-    }
-    #sidebar-header h1 {
-        font-size: 20px; font-weight: 700; color: var(--white);
-        letter-spacing: -0.4px; line-height: 1.25;
-    }
-    #sidebar-header .subtitle {
-        font-size: 13px; color: var(--ash); font-weight: 400;
-        letter-spacing: 0.2px; margin-top: 1px;
-    }
+.logo-mark {
+    width: 36px; height: 36px; flex-shrink: 0;
+    background: var(--blue); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; line-height: 1;
+}
+#sidebar-header h1 {
+    font-size: 20px; font-weight: 700; color: var(--white);
+    letter-spacing: -0.4px; line-height: 1.25;
+}
+#sidebar-header .subtitle {
+    font-size: 12px; color: var(--slate); font-weight: 400;
+    letter-spacing: 0.2px; margin-top: 1px;
+}
 
 /* ---- Form ---- */
 #route-form { padding: 8px 24px 16px; }
@@ -128,6 +124,61 @@ body {
 }
 #route-btn:hover { opacity: 0.9; }
 #route-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ---- Favorites ---- */
+#favorites-section { padding: 14px 24px; }
+#favorites-section h3 {
+    font-size: 11px; color: var(--slate);
+    text-transform: uppercase; letter-spacing: 0.7px;
+    margin-bottom: 8px; font-weight: 500;
+}
+.fav-list { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; }
+.fav-list::-webkit-scrollbar { width: 3px; }
+.fav-list::-webkit-scrollbar-track { background: transparent; }
+.fav-list::-webkit-scrollbar-thumb { background: var(--steel); border-radius: 2px; }
+.fav-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: var(--radius-badge);
+    background: var(--void); border: 1px solid var(--gunmetal);
+    cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+.fav-item:hover { border-color: var(--blue); background: var(--gunmetal); }
+.fav-item .fav-icon { font-size: 12px; flex-shrink: 0; color: var(--blue); }
+.fav-item .fav-info { flex: 1; min-width: 0; }
+.fav-item .fav-name {
+    font-size: 13px; font-weight: 500; color: var(--white);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fav-item .fav-addr {
+    font-size: 10px; color: var(--slate);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fav-item .fav-actions { display: flex; gap: 3px; flex-shrink: 0; }
+.fav-item .fav-actions button {
+    padding: 3px 7px; border: none; border-radius: var(--radius-badge);
+    font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500;
+    cursor: pointer; transition: opacity 0.15s; line-height: 1.2;
+}
+.fav-item .fav-actions .fav-use { background: var(--blue); color: var(--white); }
+.fav-item .fav-actions .fav-use:hover { opacity: 0.85; }
+.fav-item .fav-actions .fav-del { background: transparent; color: var(--slate); }
+.fav-item .fav-actions .fav-del:hover { color: var(--fog); }
+.fav-empty {
+    text-align: center; font-size: 12px; color: var(--steel);
+    padding: 12px 0;
+}
+/* Favorite badge on inputs */
+.fav-btn {
+    position: absolute; right: 8px; bottom: 8px;
+    width: 26px; height: 26px; border: none; border-radius: var(--radius-badge);
+    background: transparent; color: var(--steel); font-size: 14px;
+    cursor: pointer; transition: color 0.15s, background 0.15s;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2; line-height: 1;
+}
+.fav-btn:hover { color: var(--blue); background: rgba(0,122,252,0.1); }
+.fav-btn.saved { color: var(--blue); }
+.fav-btn.saved:hover { color: var(--blue-deep); }
 
 /* ---- Separator ---- */
 .separator { height: 1px; background: var(--gunmetal); margin: 0 24px; }
@@ -255,15 +306,22 @@ body {
             <label>Départ</label>
             <span class="input-icon">◉</span>
             <input type="text" id="from" placeholder="Adresse, lieu..." autocomplete="off" />
+            <button class="fav-btn" id="fav-from" onclick="saveFavorite('from')" title="Sauvegarder l'adresse">☆</button>
             <div class="ac-dropdown" id="ac-from"></div>
         </div>
         <div class="form-group">
             <label>Arrivée</label>
             <span class="input-icon">◎</span>
             <input type="text" id="to" placeholder="Adresse, lieu..." autocomplete="off" />
+            <button class="fav-btn" id="fav-to" onclick="saveFavorite('to')" title="Sauvegarder l'adresse">☆</button>
             <div class="ac-dropdown" id="ac-to"></div>
         </div>
         <button id="route-btn" onclick="calculateRoute()">Calculer l'itinéraire</button>
+    </div>
+
+    <div id="favorites-section">
+        <h3>⭐ Favoris</h3>
+        <div id="fav-list" class="fav-list"></div>
     </div>
 
     <div class="separator"></div>
@@ -476,7 +534,104 @@ function setVehicle(type) {
     document.querySelectorAll('.vehicle-btn').forEach((b,i) => b.classList.toggle('active', (type==='scooter' && i===0) || (type==='voiturette' && i===1)));
 }
 
+// ---- Favorites (localStorage) ----
+const FAV_KEY = 'scooter_favorites';
+
+function getFavorites() {
+    try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; }
+    catch(e) { return []; }
+}
+
+function saveFavorites(favs) {
+    localStorage.setItem(FAV_KEY, JSON.stringify(favs));
+}
+
+async function saveFavorite(type) {
+    const input = document.getElementById(type);
+    const text = input.value.trim();
+    if (!text || text.length < 3) return;
+
+    // Check for existing geocoded data from autocomplete
+    let lat = parseFloat(input.dataset.lat);
+    let lon = parseFloat(input.dataset.lon);
+    let addressText = text;
+
+    // Geocode if we don't have coordinates yet
+    if (!lat || !lon) {
+        const coord = await geocode(text + ', Nice, France');
+        if (coord) { lat = coord[0]; lon = coord[1]; }
+    }
+
+    // Prompt for a short name
+    const name = prompt('Nom du favori :', text.split(',')[0].trim() || text.slice(0, 20));
+    if (!name) return;
+
+    const favs = getFavorites();
+    // Avoid exact duplicates
+    const dup = favs.some(f => f.name === name && f.address === addressText);
+    if (dup) { return; }
+
+    favs.push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+        name, address: addressText, lat, lon
+    });
+    saveFavorites(favs);
+    renderFavorites();
+    document.getElementById('fav-' + type).classList.add('saved');
+}
+
+function useFavorite(favId, target) {
+    const favs = getFavorites();
+    const fav = favs.find(f => f.id === favId);
+    if (!fav) return;
+    const input = document.getElementById(target);
+    input.value = fav.address;
+    input.dataset.lat = fav.lat;
+    input.dataset.lon = fav.lon;
+    const coord = [fav.lat, fav.lon];
+    const isFrom = target === 'from';
+    const mk = isFrom ? 'markerStart' : 'markerEnd';
+    if (window[mk]) map.removeLayer(window[mk]);
+    window[mk] = L.circleMarker(coord, {radius:7, color:isFrom?'#007afc':'#228a56', fillColor:isFrom?'#007afc':'#228a56', fillOpacity:1, weight:2}).addTo(map).bindPopup(isFrom?'Départ':'Arrivée');
+    map.setView(coord, 14);
+    document.getElementById('fav-' + target).classList.add('saved');
+    // Close favorites section
+}
+
+function deleteFavorite(favId, e) {
+    e.stopPropagation();
+    let favs = getFavorites();
+    favs = favs.filter(f => f.id !== favId);
+    saveFavorites(favs);
+    renderFavorites();
+}
+
+function renderFavorites() {
+    const container = document.getElementById('fav-list');
+    const favs = getFavorites();
+    if (!favs.length) {
+        container.innerHTML = '<div class="fav-empty">Aucun favori enregistré</div>';
+        return;
+    }
+    container.innerHTML = favs.map(f => `
+        <div class="fav-item" ondblclick="useFavorite('${f.id}','from')">
+            <div class="fav-icon">⭐</div>
+            <div class="fav-info">
+                <div class="fav-name">${esc(f.name)}</div>
+                <div class="fav-addr">${esc(f.address)}</div>
+            </div>
+            <div class="fav-actions">
+                <button class="fav-use" onclick="useFavorite('${f.id}','from')" title="Départ">◉</button>
+                <button class="fav-use" onclick="useFavorite('${f.id}','to')" title="Arrivée">◎</button>
+                <button class="fav-del" onclick="deleteFavorite('${f.id}',event)" title="Supprimer">✕</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// ---- Init ----
 loadRestrictions();
+renderFavorites();
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && ['from','to'].includes(document.activeElement?.id)) calculateRoute(); });
 
 // PWA service worker
