@@ -1,4 +1,4 @@
-const CACHE = 'scooter-route-v1';
+const CACHE = 'scooter-route-v2';
 const URLS = ['/', '/favicon.svg', '/icon.svg', '/manifest.json'];
 
 self.addEventListener('install', e => {
