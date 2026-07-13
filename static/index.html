@@ -216,6 +216,48 @@ body {
 .route-footer a { color: var(--blue); text-decoration: none; }
 .route-footer a:hover { text-decoration: underline; }
 
+/* ---- Instructions timeline ---- */
+.instructions { margin-top: 12px; }
+.instructions h3 {
+    font-size: 11px; color: var(--slate);
+    text-transform: uppercase; letter-spacing: 0.7px;
+    margin-bottom: 8px; font-weight: 500;
+}
+.steps { list-style: none; padding: 0; margin: 0; }
+.step-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 6px 0; position: relative;
+}
+.step-dot {
+    width: 20px; flex-shrink: 0; display: flex;
+    flex-direction: column; align-items: center;
+    position: relative; top: 3px;
+}
+.step-circle {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--blue); flex-shrink: 0;
+    z-index: 1; border: 2px solid var(--deep);
+}
+.step-circle.arrivee { background: var(--green); }
+.step-circle.depart { background: transparent; border-color: var(--blue); width: 10px; height: 10px; }
+.step-line {
+    width: 2px; flex: 1; background: var(--gunmetal);
+    min-height: 18px; margin: 2px 0;
+}
+.step-info { flex: 1; min-width: 0; }
+.step-dir {
+    font-size: 13px; font-weight: 500; color: var(--white);
+    line-height: 1.3;
+}
+.step-dist {
+    font-size: 10px; color: var(--slate); margin-top: 1px;
+    letter-spacing: 0.2px;
+}
+.step-icon {
+    font-size: 14px; width: 20px; text-align: center;
+    flex-shrink: 0;
+}
+
 /* ---- Alert ---- */
 .alert {
     padding: 10px 14px; border-radius: var(--radius-chip);
@@ -513,6 +555,7 @@ async function calculateRoute() {
         const coords = data.path.map(c => [c[1], c[0]]);
         routeLine = L.polyline(coords, {color:'#007afc', weight:4, opacity:0.85, smoothFactor:0.5}).addTo(map);
         const ms = data.max_speed_kmh || (currentVehicle === 'scooter' ? 45 : 70);
+        const steps = computeSteps(data.path);
         res.innerHTML = `
             <div class="route-stats">
                 <div class="route-stat"><div class="value blue">${data.distance_km} km</div><div class="label">Distance</div></div>
@@ -522,6 +565,7 @@ async function calculateRoute() {
                 <span>${currentVehicle === 'scooter' ? '🛵 Scooter 50cc' : '🚗 Voiture sans permis'}</span>
                 <span>⚡ ${ms} km/h max</span>
             </div>
+            ${renderSteps(steps)}
             <div class="route-footer">
                 <a href="https://github.com/DnzzL/scooter-routing" target="_blank">ScooterRoute</a> · Données OSM
             </div>`;
@@ -627,6 +671,96 @@ function renderFavorites() {
             </div>
         </div>
     `).join('');
+}
+
+// ---- Turn-by-turn instructions ----\\
+function bearing(a, b) {
+    const dlon = (b[0] - a[0]) * Math.PI / 180;
+    const lat1 = a[1] * Math.PI / 180, lat2 = b[1] * Math.PI / 180;
+    const y = Math.sin(dlon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dlon);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+function angleDiff(a, b) { return (b - a + 540) % 360 - 180; }
+function haversine(a, b) {
+    const R = 6371000;
+    const dlat = (b[1] - a[1]) * Math.PI / 180;
+    const dlon = (b[0] - a[0]) * Math.PI / 180;
+    const alat = a[1] * Math.PI / 180, blat = b[1] * Math.PI / 180;
+    const x = Math.sin(dlat/2)**2 + Math.cos(alat) * Math.cos(blat) * Math.sin(dlon/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+}
+function describeTurn(deg) {
+    if (Math.abs(deg) < 15) return 'Continuez tout droit';
+    if (deg >= 15) {
+        if (deg < 40) return 'Tournez l\u00e9g\u00e8rement \u00e0 droite';
+        if (deg < 70) return 'Tournez \u00e0 droite';
+        return 'Virez \u00e0 droite';
+    } else {
+        if (deg > -40) return 'Tournez l\u00e9g\u00e8rement \u00e0 gauche';
+        if (deg > -70) return 'Tournez \u00e0 gauche';
+        return 'Virez \u00e0 gauche';
+    }
+}
+function turnIcon(deg) {
+    if (Math.abs(deg) < 15) return '\u2b06';
+    if (deg > 0) return '\u27a1\ufe0f';
+    return '\u2b05\ufe0f';
+}
+function computeSteps(path) {
+    if (path.length < 3) return [];
+    // Segment bearings
+    const bears = [];
+    for (let i = 0; i < path.length - 1; i++) bears.push(bearing(path[i], path[i+1]));
+    // Cluster consecutive segments with similar bearing
+    const clusters = [];
+    let start = 0;
+    for (let i = 1; i < bears.length; i++) {
+        if (Math.abs(angleDiff(bears[start], bears[i])) > 20) {
+            clusters.push({ from: start, to: i, bearing: bears[start] });
+            start = i;
+        }
+    }
+    clusters.push({ from: start, to: bears.length, bearing: bears[start] });
+    // Generate instructions at cluster boundaries
+    const steps = [];
+    for (let i = 1; i < clusters.length; i++) {
+        const prev = clusters[i-1], curr = clusters[i];
+        const deg = angleDiff(prev.bearing, curr.bearing);
+        let d = 0;
+        const nodeIdx = curr.from;
+        for (let j = i > 1 ? clusters[i-1].from : 0; j < nodeIdx; j++) d += haversine(path[j], path[j+1]);
+        steps.push({
+            instruction: describeTurn(deg),
+            icon: turnIcon(deg),
+            distance_m: Math.round(d),
+            lat: path[nodeIdx][1],
+            lon: path[nodeIdx][0]
+        });
+    }
+    return steps;
+}
+function renderSteps(steps) {
+    if (!steps || !steps.length) return '';
+    let html = '<div class="instructions"><h3>\u00b7 Itin\u00e9raire</h3><div class="steps">';
+    steps.forEach((s, i) => {
+        const isLast = i === steps.length - 1;
+        html += '<div class="step-item">';
+        html += '<div class="step-dot">';
+        html += '<div class="step-circle' + (isLast ? ' arrivee' : '') + '"></div>';
+        if (!isLast) html += '<div class="step-line"></div>';
+        html += '</div>';
+        html += '<div class="step-icon">' + s.icon + '</div>';
+        html += '<div class="step-info">';
+        html += '<div class="step-dir">' + s.instruction + '</div>';
+        if (s.distance_m > 0) {
+            const d = s.distance_m >= 1000 ? (s.distance_m/1000).toFixed(1) + ' km' : s.distance_m + ' m';
+            html += '<div class="step-dist">' + d + '</div>';
+        }
+        html += '</div></div>';
+    });
+    html += '</div></div>';
+    return html;
 }
 
 // ---- Init ----
