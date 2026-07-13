@@ -180,6 +180,19 @@ body {
 .fav-btn.saved { color: var(--blue); }
 .fav-btn.saved:hover { color: var(--blue-deep); }
 
+/* ---- Geo button ---- */
+.geo-btn {
+    position: absolute; right: 36px; bottom: 8px;
+    width: 26px; height: 26px; border: none; border-radius: var(--radius-badge);
+    background: transparent; color: var(--steel); font-size: 14px;
+    cursor: pointer; transition: color 0.15s, background 0.15s;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2; line-height: 1;
+}
+.geo-btn:hover { color: var(--green); background: rgba(34,138,86,0.1); }
+.geo-btn.loading { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
 /* ---- Separator ---- */
 .separator { height: 1px; background: var(--gunmetal); margin: 0 24px; }
 
@@ -348,6 +361,7 @@ body {
             <label>Départ</label>
             <span class="input-icon">◉</span>
             <input type="text" id="from" placeholder="Adresse, lieu..." autocomplete="off" />
+            <button class="geo-btn" id="geo-from" onclick="useGeolocation()" title="Utiliser ma position">📍</button>
             <button class="fav-btn" id="fav-from" onclick="saveFavorite('from')" title="Sauvegarder l'adresse">☆</button>
             <div class="ac-dropdown" id="ac-from"></div>
         </div>
@@ -571,6 +585,34 @@ async function calculateRoute() {
             </div>`;
     } catch(e) { res.innerHTML = `<div class="alert">Erreur : ${e.message}</div>`; }
     btn.disabled = false; btn.innerHTML = 'Calculer l\'itinéraire';
+}
+
+function useGeolocation() {
+    if (!navigator.geolocation) { alert('Géolocalisation non supportée'); return; }
+    const btn = document.getElementById('geo-from');
+    btn.classList.add('loading');
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        btn.classList.remove('loading');
+        const lat = pos.coords.latitude, lon = pos.coords.longitude;
+        const input = document.getElementById('from');
+        // Reverse geocode
+        try {
+            const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`, {headers:{'User-Agent':'ScooterRoute/1.0'},signal:AbortSignal.timeout(5000)});
+            const data = await resp.json();
+            const addr = data.display_name || '';
+            input.value = addr ? addr.split(',').slice(0,3).join(',') : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+        } catch(e) { input.value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`; }
+        input.dataset.lat = lat; input.dataset.lon = lon;
+        const coord = [lat, lon];
+        if (markerStart) map.removeLayer(markerStart);
+        markerStart = L.circleMarker(coord, {radius:7,color:'#007afc',fillColor:'#007afc',fillOpacity:1,weight:2}).addTo(map).bindPopup('Départ');
+        map.setView(coord, 14);
+        document.getElementById('fav-from').classList.add('saved');
+    }, (err) => {
+        btn.classList.remove('loading');
+        const msg = err.code === 1 ? 'Permission de localisation refusée. Activez-la dans les paramètres de votre navigateur.' : err.message;
+        alert(msg);
+    }, { enableHighAccuracy: true, timeout: 10000 });
 }
 
 function setVehicle(type) {
